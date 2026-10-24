@@ -254,6 +254,34 @@ class TodoStore {
     return this._cloneList(list);
   }
 
+  reorderLists(ids) {
+    if (!Array.isArray(ids)) return null;
+
+    const active = this.state.lists.filter((list) => !list.deletedAt);
+    if (ids.length !== active.length) return null;
+
+    const activeById = new Map(active.map((list) => [list.id, list]));
+    const seen = new Set();
+    const ordered = [];
+
+    for (const id of ids) {
+      if (typeof id !== 'string' || seen.has(id) || !activeById.has(id)) return null;
+      seen.add(id);
+      ordered.push(activeById.get(id));
+    }
+
+    let cursor = 0;
+    this.state.lists = this.state.lists.map((list) => {
+      if (list.deletedAt) return list;
+      const next = ordered[cursor];
+      cursor += 1;
+      return next;
+    });
+
+    this._persist();
+    return this.getActiveLists();
+  }
+
   permanentlyDeleteList(id) {
     const index = this.state.lists.findIndex((entry) => entry.id === id);
     if (index === -1) return false;

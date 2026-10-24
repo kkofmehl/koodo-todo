@@ -118,6 +118,44 @@ describe('TodoStore', () => {
     assert.equal(isItemCompleted(fresh.items[0], fresh), true);
   });
 
+  it('reorders active lists and leaves deleted lists in place', () => {
+    const first = store.createList({ name: 'First', color: '#5B8DEF' });
+    const second = store.createList({ name: 'Second', color: '#7C5CFC' });
+    const third = store.createList({ name: 'Third', color: '#E85D9A' });
+    store.deleteList(second.id);
+
+    const reordered = store.reorderLists([first.id, third.id]);
+    assert.deepEqual(reordered.map((list) => list.name), ['First', 'Third']);
+    assert.deepEqual(store.state.lists.map((list) => list.name), ['First', 'Second', 'Third']);
+    assert.equal(store.getActiveLists().map((list) => list.id).join(','), `${first.id},${third.id}`);
+  });
+
+  it('rejects list orders that are not a permutation of the active lists', () => {
+    const first = store.createList({ name: 'First', color: '#5B8DEF' });
+    const second = store.createList({ name: 'Second', color: '#7C5CFC' });
+
+    assert.equal(store.reorderLists([first.id]), null);
+    assert.equal(store.reorderLists([first.id, first.id]), null);
+    assert.equal(store.reorderLists([first.id, 'missing']), null);
+    assert.equal(store.reorderLists('nope'), null);
+    assert.deepEqual(store.getActiveLists().map((list) => list.name), ['Second', 'First']);
+
+    store.deleteList(second.id);
+    assert.equal(store.reorderLists([first.id, second.id]), null);
+    assert.deepEqual(store.getActiveLists().map((list) => list.id), [first.id]);
+  });
+
+  it('persists list order across store reloads', async () => {
+    const first = store.createList({ name: 'First', color: '#5B8DEF' });
+    const second = store.createList({ name: 'Second', color: '#7C5CFC' });
+    store.reorderLists([first.id, second.id]);
+    await store.writeQueue;
+
+    const reloaded = new TodoStore(tmpDir);
+    reloaded.init();
+    assert.deepEqual(reloaded.getActiveLists().map((list) => list.name), ['First', 'Second']);
+  });
+
   it('soft-deletes lists into the recycle bin and restores them', () => {
     const list = store.createList({ name: 'Gone', color: '#5B8DEF' });
     store.deleteList(list.id);

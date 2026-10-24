@@ -26,6 +26,14 @@ function createListsRouter(todoStore) {
     res.json({ lists, colors: config.LIST_COLORS });
   });
 
+  router.post('/reorder', (req, res) => {
+    const lists = todoStore.reorderLists(req.body?.ids);
+    if (!lists) {
+      return res.status(400).json({ error: 'Invalid list order' });
+    }
+    res.json({ lists: lists.map((list) => decorateList(list)) });
+  });
+
   router.get('/deleted', (req, res) => {
     const lists = todoStore.getDeletedLists().map((list) => decorateList(list));
     res.json({ lists });

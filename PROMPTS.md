@@ -31,3 +31,7 @@ To-do's from the plan have already been created. Do not create them again. Mark 
 
 Add in the code that allows this to be set-up as a PWA
 
+## 2026-10-24 — Reorder lists
+
+Let's add the ability to re-order the lists with drag and drop
+

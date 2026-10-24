@@ -6,6 +6,7 @@ A private, PIN-gated todo app built for phone use. Multiple lists with colors, o
 
 - PIN unlock once per device (HttpOnly cookie, 1 year)
 - Any number of named, colored lists
+- Drag lists on the home screen to change their order
 - Optional due date per list
 - Daily lists that keep items and clear checks each America/Chicago day
 - Items with one level of sub-items

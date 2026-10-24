@@ -199,6 +199,63 @@ button {
   min-height: 76px;
 }
 
+.list-card.sortable {
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 4px;
+  padding-left: 6px;
+}
+
+.list-open {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  min-width: 0;
+  min-height: 56px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.drag-handle {
+  align-self: stretch;
+  width: 36px;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: grab;
+  box-shadow: none;
+}
+
+.drag-handle:active,
+.list-card.dragging .drag-handle {
+  cursor: grabbing;
+}
+
+.grip {
+  width: 10px;
+  height: 16px;
+  background: radial-gradient(circle, currentColor 1.25px, transparent 1.45px) 0 0 / 5px 5.4px;
+  opacity: 0.85;
+}
+
+.list-card.dragging {
+  z-index: 20;
+  transform: scale(1.03);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+.list-card-placeholder {
+  border-radius: var(--radius);
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .list-card .edge {
   align-self: stretch;
   border-radius: 999px;
