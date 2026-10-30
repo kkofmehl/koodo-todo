@@ -31,3 +31,7 @@ To-do's from the plan have already been created. Do not create them again. Mark 
 
 Add in the code that allows this to be set-up as a PWA
 
+## 2026-10-30 — Set up Cloud Agent environment
+
+/env-setup Set up a new development environment for this codebase. Follow the “Set up a new environment” workflow in the env-setup skill. Run the relevant applications and demonstrate that the environment works end to end.
+
