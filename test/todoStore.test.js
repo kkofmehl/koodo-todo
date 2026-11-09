@@ -7,6 +7,14 @@ const { TodoStore } = require('../src/store/todoStore');
 const { isItemCompleted } = require('../src/completion');
 const { formatChicagoDateKey } = require('../src/time/chicago');
 
+function texts(items) {
+  return items.map((item) => item.text);
+}
+
+function children(store, listId) {
+  return store.getList(listId).items[0].children;
+}
+
 describe('TodoStore', () => {
   let tmpDir;
   let store;
@@ -116,6 +124,79 @@ describe('TodoStore', () => {
 
     const fresh = store.getList(list.id);
     assert.equal(isItemCompleted(fresh.items[0], fresh), true);
+  });
+
+  it('moves a newly checked item to the end and an unchecked item below open items', () => {
+    const list = store.createList({ name: 'Tasks', color: '#5B8DEF' });
+    const alpha = store.addItem(list.id, { text: 'Alpha' });
+    const beta = store.addItem(list.id, { text: 'Beta' });
+    const gamma = store.addItem(list.id, { text: 'Gamma' });
+
+    store.setItemCompleted(list.id, beta.id, true);
+    assert.deepEqual(texts(store.getList(list.id).items), ['Alpha', 'Gamma', 'Beta']);
+
+    store.setItemCompleted(list.id, alpha.id, true);
+    assert.deepEqual(texts(store.getList(list.id).items), ['Gamma', 'Beta', 'Alpha']);
+
+    store.setItemCompleted(list.id, alpha.id, false);
+    assert.deepEqual(texts(store.getList(list.id).items), ['Gamma', 'Alpha', 'Beta']);
+
+    store.reorderItems(list.id, [beta.id, gamma.id, alpha.id]);
+    store.setItemCompleted(list.id, beta.id, true);
+    assert.deepEqual(texts(store.getList(list.id).items), ['Beta', 'Gamma', 'Alpha']);
+  });
+
+  it('moves checked sub-items to the end of their siblings and back among open siblings', () => {
+    const list = store.createList({ name: 'Tasks', color: '#5B8DEF' });
+    const parent = store.addItem(list.id, { text: 'Parent' });
+    const first = store.addSubItem(list.id, parent.id, { text: 'One' });
+    const second = store.addSubItem(list.id, parent.id, { text: 'Two' });
+    const third = store.addSubItem(list.id, parent.id, { text: 'Three' });
+
+    store.setItemCompleted(list.id, first.id, true);
+    assert.deepEqual(texts(children(store, list.id)), ['Two', 'Three', 'One']);
+
+    store.setItemCompleted(list.id, third.id, true);
+    assert.deepEqual(texts(children(store, list.id)), ['Two', 'One', 'Three']);
+
+    store.setItemCompleted(list.id, first.id, false);
+    assert.deepEqual(texts(children(store, list.id)), ['Two', 'One', 'Three']);
+
+    assert.deepEqual(texts(store.getList(list.id).items), ['Parent']);
+  });
+
+  it('reorders items and sub-items within a list', () => {
+    const list = store.createList({ name: 'Tasks', color: '#5B8DEF' });
+    const first = store.addItem(list.id, { text: 'First' });
+    const second = store.addItem(list.id, { text: 'Second' });
+    const third = store.addItem(list.id, { text: 'Third' });
+    const childA = store.addSubItem(list.id, second.id, { text: 'A' });
+    const childB = store.addSubItem(list.id, second.id, { text: 'B' });
+
+    const reordered = store.reorderItems(list.id, [third.id, first.id, second.id]);
+    assert.deepEqual(texts(reordered.items), ['Third', 'First', 'Second']);
+
+    const childrenReordered = store.reorderSubItems(list.id, second.id, [childB.id, childA.id]);
+    assert.deepEqual(texts(childrenReordered.items.find((item) => item.id === second.id).children), ['B', 'A']);
+    assert.deepEqual(texts(store.getList(list.id).items), ['Third', 'First', 'Second']);
+  });
+
+  it('rejects item orders that are not a permutation', () => {
+    const list = store.createList({ name: 'Tasks', color: '#5B8DEF' });
+    const first = store.addItem(list.id, { text: 'First' });
+    const second = store.addItem(list.id, { text: 'Second' });
+    const child = store.addSubItem(list.id, first.id, { text: 'Child' });
+
+    assert.equal(store.reorderItems(list.id, [first.id]), null);
+    assert.equal(store.reorderItems(list.id, [first.id, first.id]), null);
+    assert.equal(store.reorderItems(list.id, [first.id, 'missing']), null);
+    assert.equal(store.reorderItems(list.id, 'nope'), null);
+    assert.equal(store.reorderSubItems(list.id, first.id, [child.id, second.id]), null);
+    assert.equal(store.reorderSubItems(list.id, 'missing', [child.id]), null);
+    assert.deepEqual(texts(store.getList(list.id).items), ['First', 'Second']);
+
+    store.deleteList(list.id);
+    assert.equal(store.reorderItems(list.id, [first.id, second.id]), null);
   });
 
   it('reorders active lists and leaves deleted lists in place', () => {

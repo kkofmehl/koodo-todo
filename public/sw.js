@@ -1,5 +1,5 @@
 /* Koodo Todo service worker — caches the app shell for installability / offline shell. */
-const CACHE_VERSION = 'koodo-v2';
+const CACHE_VERSION = 'koodo-v3';
 const SHELL_URLS = [
   '/',
   '/index.html',

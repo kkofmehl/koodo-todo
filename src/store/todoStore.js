@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const config = require('../config');
+const { isItemCompleted } = require('../completion');
 const { formatChicagoDateKey, parseTimeHHMM } = require('../time/chicago');
 
 const STORE_FILE = 'todos.json';
@@ -85,6 +86,39 @@ function createItem(text) {
     completedOn: null,
     children: [],
   };
+}
+
+function reorderEntries(entries, ids) {
+  if (!Array.isArray(ids) || ids.length !== entries.length) return null;
+
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const seen = new Set();
+  const ordered = [];
+
+  for (const id of ids) {
+    if (typeof id !== 'string' || seen.has(id) || !byId.has(id)) return null;
+    seen.add(id);
+    ordered.push(byId.get(id));
+  }
+
+  return ordered;
+}
+
+function relocateEntry(siblings, item, completed, list, now) {
+  const index = siblings.findIndex((entry) => entry.id === item.id);
+  if (index === -1) return;
+
+  const [removed] = siblings.splice(index, 1);
+  if (completed) {
+    siblings.push(removed);
+    return;
+  }
+
+  let lastOpen = -1;
+  for (let i = 0; i < siblings.length; i += 1) {
+    if (!isItemCompleted(siblings[i], list, now)) lastOpen = i;
+  }
+  siblings.splice(lastOpen + 1, 0, removed);
 }
 
 class TodoStore {
@@ -340,15 +374,58 @@ class TodoStore {
     const located = this._locateItem(listId, itemId);
     if (!located) return null;
 
+    const wasCompleted = isItemCompleted(located.item, located.list, now);
     if (completed) {
       located.item.completedOn = formatChicagoDateKey(now);
     } else {
       located.item.completedOn = null;
     }
 
+    const isCompleted = isItemCompleted(located.item, located.list, now);
+    if (wasCompleted !== isCompleted) {
+      this._relocateAfterCompletion(located.list, located.item, isCompleted, now);
+    }
+
     located.list.updatedAt = new Date().toISOString();
     this._persist();
     return JSON.parse(JSON.stringify(located.item));
+  }
+
+  reorderItems(listId, ids) {
+    const list = this._findList(listId);
+    if (!list || list.deletedAt) return null;
+
+    const ordered = reorderEntries(list.items, ids);
+    if (!ordered) return null;
+
+    list.items = ordered;
+    list.updatedAt = new Date().toISOString();
+    this._persist();
+    return this._cloneList(list);
+  }
+
+  reorderSubItems(listId, parentItemId, ids) {
+    const list = this._findList(listId);
+    if (!list || list.deletedAt) return null;
+
+    const parent = list.items.find((item) => item.id === parentItemId);
+    if (!parent) return null;
+
+    const ordered = reorderEntries(parent.children || [], ids);
+    if (!ordered) return null;
+
+    parent.children = ordered;
+    list.updatedAt = new Date().toISOString();
+    this._persist();
+    return this._cloneList(list);
+  }
+
+  _relocateAfterCompletion(list, item, completed, now) {
+    const parent = list.items.find((entry) =>
+      (entry.children || []).some((child) => child.id === item.id)
+    );
+    const siblings = parent ? parent.children : list.items;
+    relocateEntry(siblings, item, completed, list, now);
   }
 
   deleteItem(listId, itemId) {

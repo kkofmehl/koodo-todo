@@ -35,3 +35,9 @@ Add in the code that allows this to be set-up as a PWA
 
 Let's add the ability to re-order the lists with drag and drop
 
+## 2026-11-09 — Reorder items and hide checked ones
+
+Features to add:
+- add drag and drop re-ordering of items within a list
+- any checked items should be added to a collapsible area at the bottom of the list so they are hidden, but can be viewed and unchecked by uncollapsing the section. If unchecked, it should move back up to the bottom of the current unchecked items.
+

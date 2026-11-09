@@ -9,9 +9,11 @@
     settings: { reminderEmail: '' },
     error: '',
     busy: false,
+    completedExpanded: {},
   };
 
   let listOrderRequest = 0;
+  let itemOrderRequest = 0;
 
   function parseRoute() {
     const hash = location.hash.replace(/^#/, '') || '/';
@@ -150,7 +152,7 @@
           `;
         }
         return `
-          <div class="glossy list-card sortable" data-list-id="${escapeHtml(list.id)}" style="--accent:${escapeHtml(list.color)}">
+          <div class="glossy list-card sortable" data-list-id="${escapeHtml(list.id)}" data-reorder-id="${escapeHtml(list.id)}" style="--accent:${escapeHtml(list.color)}">
             <button type="button" class="drag-handle" data-drag-handle aria-label="Drag to reorder ${escapeHtml(list.name)}">
               <span class="grip" aria-hidden="true"></span>
             </button>
@@ -180,40 +182,54 @@
   }
 
   function wireListReorder() {
-    const grid = appEl.querySelector('.list-grid');
-    if (!grid) return;
+    wireSortable(appEl.querySelector('.list-grid'), (ids) => persistListOrder(ids));
+  }
 
-    grid.querySelectorAll('[data-drag-handle]').forEach((handle) => {
-      const card = handle.closest('[data-list-id]');
-      if (!card) return;
+  function sortableHandle(itemEl) {
+    if (itemEl.classList.contains('item-group')) {
+      return itemEl.querySelector(':scope > .item-row > [data-drag-handle]');
+    }
+    return itemEl.querySelector(':scope > [data-drag-handle]');
+  }
+
+  function wireSortable(container, onCommit) {
+    if (!container || !onCommit) return;
+
+    container.querySelectorAll(':scope > [data-reorder-id]').forEach((itemEl) => {
+      const handle = sortableHandle(itemEl);
+      if (!handle) return;
 
       handle.addEventListener('pointerdown', (event) => {
         if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
-        startListDrag(event, handle, card, grid);
+        startSortDrag(event, handle, itemEl, container, onCommit);
       });
 
       handle.addEventListener('keydown', (event) => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
         event.preventDefault();
-        moveListCard(grid, card, event.key === 'ArrowUp' ? -1 : 1);
+        moveSortable(container, itemEl, event.key === 'ArrowUp' ? -1 : 1, onCommit);
         handle.focus();
       });
     });
   }
 
-  function moveListCard(grid, card, direction) {
-    const cards = [...grid.querySelectorAll('[data-list-id]')];
-    const index = cards.indexOf(card);
+  function moveSortable(container, itemEl, direction, onCommit) {
+    const items = [...container.querySelectorAll(':scope > [data-reorder-id]')];
+    const index = items.indexOf(itemEl);
     const nextIndex = index + direction;
-    if (index === -1 || nextIndex < 0 || nextIndex >= cards.length) return;
-    const sibling = cards[nextIndex];
-    if (direction < 0) grid.insertBefore(card, sibling);
-    else grid.insertBefore(sibling, card);
-    persistListOrder([...grid.querySelectorAll('[data-list-id]')].map((el) => el.dataset.listId));
+    if (index === -1 || nextIndex < 0 || nextIndex >= items.length) return;
+    const sibling = items[nextIndex];
+    if (direction < 0) container.insertBefore(itemEl, sibling);
+    else container.insertBefore(sibling, itemEl);
+    onCommit(sortableIds(container));
   }
 
-  function startListDrag(event, handle, card, grid) {
+  function sortableIds(container) {
+    return [...container.querySelectorAll(':scope > [data-reorder-id]')].map((el) => el.dataset.reorderId);
+  }
+
+  function startSortDrag(event, handle, itemEl, container, onCommit) {
     try {
       handle.setPointerCapture(event.pointerId);
     } catch {
@@ -221,27 +237,28 @@
     }
     const originX = event.clientX;
     const originY = event.clientY;
-    const originRect = card.getBoundingClientRect();
+    const originRect = itemEl.getBoundingClientRect();
     let dragging = false;
     let placeholder = null;
 
     function lift(clientX, clientY) {
       dragging = true;
       placeholder = document.createElement('div');
-      placeholder.className = 'list-card-placeholder';
+      placeholder.className = 'reorder-placeholder';
       placeholder.style.height = `${originRect.height}px`;
-      grid.insertBefore(placeholder, card);
-      card.classList.add('dragging');
-      card.style.width = `${originRect.width}px`;
-      card.style.position = 'fixed';
-      card.style.left = `${clientX - (originX - originRect.left)}px`;
-      card.style.top = `${clientY - (originY - originRect.top)}px`;
-      card.style.margin = '0';
-      document.body.appendChild(card);
+      container.insertBefore(placeholder, itemEl);
+      itemEl.classList.add('dragging');
+      itemEl.style.width = `${originRect.width}px`;
+      itemEl.style.position = 'fixed';
+      itemEl.style.left = `${clientX - (originX - originRect.left)}px`;
+      itemEl.style.top = `${clientY - (originY - originRect.top)}px`;
+      itemEl.style.margin = '0';
+      itemEl.style.zIndex = '30';
+      document.body.appendChild(itemEl);
     }
 
     function placePlaceholder(clientY) {
-      const siblings = [...grid.querySelectorAll('.list-card')];
+      const siblings = [...container.querySelectorAll(':scope > [data-reorder-id]')];
       let before = null;
       for (const sibling of siblings) {
         const box = sibling.getBoundingClientRect();
@@ -251,9 +268,9 @@
         }
       }
       if (before) {
-        if (placeholder.nextElementSibling !== before) grid.insertBefore(placeholder, before);
-      } else if (grid.lastElementChild !== placeholder) {
-        grid.appendChild(placeholder);
+        if (placeholder.nextElementSibling !== before) container.insertBefore(placeholder, before);
+      } else if (container.lastElementChild !== placeholder) {
+        container.appendChild(placeholder);
       }
     }
 
@@ -267,8 +284,8 @@
       }
       const offsetX = originX - originRect.left;
       const offsetY = originY - originRect.top;
-      card.style.left = `${moveEvent.clientX - offsetX}px`;
-      card.style.top = `${moveEvent.clientY - offsetY}px`;
+      itemEl.style.left = `${moveEvent.clientX - offsetX}px`;
+      itemEl.style.top = `${moveEvent.clientY - offsetY}px`;
       const edge = 56;
       if (moveEvent.clientY < edge) window.scrollBy(0, -12);
       else if (moveEvent.clientY > window.innerHeight - edge) window.scrollBy(0, 12);
@@ -281,15 +298,16 @@
       handle.removeEventListener('pointercancel', onUp);
       if (!dragging) return;
 
-      card.classList.remove('dragging');
-      card.style.position = '';
-      card.style.left = '';
-      card.style.top = '';
-      card.style.width = '';
-      card.style.margin = '';
-      grid.insertBefore(card, placeholder);
+      itemEl.classList.remove('dragging');
+      itemEl.style.position = '';
+      itemEl.style.left = '';
+      itemEl.style.top = '';
+      itemEl.style.width = '';
+      itemEl.style.margin = '';
+      itemEl.style.zIndex = '';
+      container.insertBefore(itemEl, placeholder);
       placeholder.remove();
-      persistListOrder([...grid.querySelectorAll('[data-list-id]')].map((el) => el.dataset.listId));
+      onCommit(sortableIds(container));
     }
 
     function onUp(upEvent) {
@@ -416,12 +434,25 @@
       return;
     }
 
-    const itemsHtml = list.items.length
-      ? list.items.map((item) => {
-        const children = (item.children || []).map((child) => itemRow(child, true, item.id)).join('');
-        return itemRow(item, false) + children;
-      }).join('')
+    const { openItems, doneItems, detached, checkedCount } = splitItems(list);
+    const openHtml = list.items.length
+      ? openItems.map((item) => itemGroup(item, { draggable: openItems.length > 1 })).join('')
       : `<div class="glossy empty">No items yet.</div>`;
+    const completedOpen = Boolean(state.completedExpanded[list.id]);
+    const completedHtml = checkedCount
+      ? `
+        <details class="glossy completed-section" ${completedOpen ? 'open' : ''}>
+          <summary>
+            <span class="completed-label"><span class="chevron" aria-hidden="true"></span>Completed</span>
+            <span class="badge">${checkedCount}</span>
+          </summary>
+          <div class="completed-body">
+            <div class="items completed-items" data-sortable="done">${doneItems.map((item) => itemGroup(item, { draggable: doneItems.length > 1 })).join('')}</div>
+            ${detached.length ? `<div class="detached-items">${detached.map(({ parent, child }) => itemRow(child, { child: true, context: parent.text })).join('')}</div>` : ''}
+          </div>
+        </details>
+      `
+      : '';
 
     appEl.innerHTML = `
       <section class="screen">
@@ -465,7 +496,10 @@
             <button class="danger-btn" type="button" id="delete-list">Delete</button>
           </div>
         </div>` : ''}
-        <div class="items">${itemsHtml}</div>
+        <div class="list-body">
+          <div class="items" data-sortable="open">${openHtml}</div>
+          ${completedHtml}
+        </div>
         <form class="glossy composer" id="add-item-form">
           <input class="item-input" id="new-item-text" placeholder="Add an item" maxlength="500" required />
           <button class="primary-btn" type="submit">Add</button>
@@ -562,19 +596,168 @@
         renderList();
       });
     });
+
+    const completedSection = appEl.querySelector('.completed-section');
+    if (completedSection) {
+      completedSection.addEventListener('toggle', () => {
+        state.completedExpanded[list.id] = completedSection.open;
+      });
+    }
+
+    wireItemReorder();
   }
 
-  function itemRow(item, isChild) {
+  function splitItems(list) {
+    const openItems = [];
+    const doneItems = [];
+    const detached = [];
+    let checkedCount = 0;
+
+    for (const item of list.items) {
+      if (item.completed) {
+        doneItems.push(item);
+        checkedCount += 1;
+        for (const child of item.children || []) {
+          if (child.completed) checkedCount += 1;
+        }
+      } else {
+        openItems.push(item);
+        for (const child of item.children || []) {
+          if (!child.completed) continue;
+          detached.push({ parent: item, child });
+          checkedCount += 1;
+        }
+      }
+    }
+
+    return { openItems, doneItems, detached, checkedCount };
+  }
+
+  function itemGroup(item, { draggable }) {
+    const children = item.completed
+      ? (item.children || [])
+      : (item.children || []).filter((child) => !child.completed);
+    const childrenDraggable = children.length > 1;
+    const childRows = children.map((child) => itemRow(child, {
+      child: true,
+      draggable: childrenDraggable,
+      reorderId: child.id,
+    })).join('');
+
     return `
-      <div class="glossy item-row ${isChild ? 'child' : ''}">
-        <button type="button" class="check ${item.completed ? 'on' : ''}" data-toggle-item="${escapeHtml(item.id)}" data-completed="${item.completed ? 'true' : 'false'}" aria-label="Toggle">✓</button>
-        <div class="item-text ${item.completed ? 'done' : ''}">${escapeHtml(item.text)}</div>
+      <div class="item-group" data-reorder-id="${escapeHtml(item.id)}">
+        ${itemRow(item, { draggable })}
+        ${childRows ? `<div class="subitems" data-parent-id="${escapeHtml(item.id)}">${childRows}</div>` : ''}
+      </div>
+    `;
+  }
+
+  function itemRow(item, { child = false, draggable = false, reorderId = '', context = '' } = {}) {
+    const handle = draggable
+      ? `<button type="button" class="drag-handle" data-drag-handle aria-label="Drag to reorder ${escapeHtml(item.text)}"><span class="grip" aria-hidden="true"></span></button>`
+      : '';
+    return `
+      <div class="glossy item-row ${child ? 'child' : ''} ${draggable ? '' : 'no-drag'}" ${reorderId ? `data-reorder-id="${escapeHtml(reorderId)}"` : ''}>
+        ${handle}
+        <button type="button" class="check ${item.completed ? 'on' : ''}" data-toggle-item="${escapeHtml(item.id)}" data-completed="${item.completed ? 'true' : 'false'}" aria-label="${item.completed ? 'Mark not done' : 'Mark done'}">✓</button>
+        <div class="item-copy">
+          <div class="item-text ${item.completed ? 'done' : ''}">${escapeHtml(item.text)}</div>
+          ${context ? `<div class="item-context">${escapeHtml(context)}</div>` : ''}
+        </div>
         <div class="item-actions">
-          ${isChild ? '' : `<button type="button" data-add-sub="${escapeHtml(item.id)}" aria-label="Add sub-item">+</button>`}
+          ${child ? '' : `<button type="button" data-add-sub="${escapeHtml(item.id)}" aria-label="Add sub-item">+</button>`}
           <button type="button" data-delete-item="${escapeHtml(item.id)}" aria-label="Delete">✕</button>
         </div>
       </div>
     `;
+  }
+
+  function sameIds(left, right) {
+    return left.length === right.length && left.every((id, index) => id === right[index]);
+  }
+
+  function wireItemReorder() {
+    const list = state.currentList;
+    if (!list) return;
+
+    wireSortable(appEl.querySelector('[data-sortable="open"]'), (openIds) => {
+      const doneIds = state.currentList.items.filter((item) => item.completed).map((item) => item.id);
+      persistItemOrder([...openIds, ...doneIds]);
+    });
+
+    wireSortable(appEl.querySelector('[data-sortable="done"]'), (doneIds) => {
+      const openIds = state.currentList.items.filter((item) => !item.completed).map((item) => item.id);
+      persistItemOrder([...openIds, ...doneIds]);
+    });
+
+    appEl.querySelectorAll('.subitems').forEach((container) => {
+      wireSortable(container, (childIds) => {
+        const parent = state.currentList.items.find((item) => item.id === container.dataset.parentId);
+        if (!parent) return;
+        const doneChildIds = parent.completed
+          ? []
+          : (parent.children || []).filter((child) => child.completed).map((child) => child.id);
+        persistSubItemOrder(parent.id, [...childIds, ...doneChildIds]);
+      });
+    });
+  }
+
+  async function persistItemOrder(ids) {
+    const list = state.currentList;
+    if (!list) return;
+    const previous = list.items.map((item) => item.id);
+    if (sameIds(ids, previous)) return;
+
+    const byId = new Map(list.items.map((item) => [item.id, item]));
+    const requestId = ++itemOrderRequest;
+    list.items = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    try {
+      const data = await api(`/api/lists/${list.id}/items/reorder`, {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      if (requestId !== itemOrderRequest) return;
+      state.currentList = data.list;
+    } catch (err) {
+      if (requestId !== itemOrderRequest) return;
+      try {
+        await loadList(list.id);
+        renderList();
+      } catch {
+        state.error = err.message || 'Could not save item order';
+      }
+    }
+  }
+
+  async function persistSubItemOrder(parentId, ids) {
+    const list = state.currentList;
+    if (!list) return;
+    const parent = list.items.find((item) => item.id === parentId);
+    if (!parent) return;
+    const previous = (parent.children || []).map((child) => child.id);
+    if (sameIds(ids, previous)) return;
+
+    const byId = new Map((parent.children || []).map((child) => [child.id, child]));
+    const requestId = ++itemOrderRequest;
+    parent.children = ids.map((id) => byId.get(id)).filter(Boolean);
+
+    try {
+      const data = await api(`/api/lists/${list.id}/items/${parentId}/subitems/reorder`, {
+        method: 'POST',
+        body: JSON.stringify({ ids }),
+      });
+      if (requestId !== itemOrderRequest) return;
+      state.currentList = data.list;
+    } catch (err) {
+      if (requestId !== itemOrderRequest) return;
+      try {
+        await loadList(list.id);
+        renderList();
+      } catch {
+        state.error = err.message || 'Could not save item order';
+      }
+    }
   }
 
   function renderBin() {

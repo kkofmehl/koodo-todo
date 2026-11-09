@@ -87,6 +87,22 @@ function createListsRouter(todoStore) {
     res.json({ ok: true });
   });
 
+  router.post('/:id/items/reorder', (req, res) => {
+    const list = todoStore.reorderItems(req.params.id, req.body?.ids);
+    if (!list) {
+      return res.status(400).json({ error: 'Invalid item order' });
+    }
+    res.json({ list: decorateList(list) });
+  });
+
+  router.post('/:id/items/:itemId/subitems/reorder', (req, res) => {
+    const list = todoStore.reorderSubItems(req.params.id, req.params.itemId, req.body?.ids);
+    if (!list) {
+      return res.status(400).json({ error: 'Invalid item order' });
+    }
+    res.json({ list: decorateList(list) });
+  });
+
   router.post('/:id/items', (req, res) => {
     const item = todoStore.addItem(req.params.id, req.body || {});
     if (!item) {

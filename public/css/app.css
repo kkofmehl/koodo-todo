@@ -244,12 +244,15 @@ button {
   opacity: 0.85;
 }
 
-.list-card.dragging {
-  z-index: 20;
-  transform: scale(1.03);
+.list-card.dragging,
+.item-group.dragging,
+.item-row.dragging {
+  z-index: 30;
+  transform: scale(1.02);
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
 }
 
+.reorder-placeholder,
 .list-card-placeholder {
   border-radius: var(--radius);
   border: 1px dashed rgba(255, 255, 255, 0.22);
@@ -407,28 +410,97 @@ button {
   padding: 16px;
 }
 
-.items {
+.list-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 88px;
+}
+
+.items,
+.subitems,
+.detached-items,
+.item-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-bottom: 88px;
 }
 
 .item-row {
   display: grid;
-  grid-template-columns: var(--tap) 1fr auto;
+  grid-template-columns: 28px var(--tap) minmax(0, 1fr) auto;
   gap: 4px;
   align-items: center;
   padding: 8px 10px;
   min-height: 56px;
 }
 
+.item-row.no-drag {
+  grid-template-columns: var(--tap) minmax(0, 1fr) auto;
+}
+
+.item-row > .drag-handle {
+  width: 28px;
+  min-height: 40px;
+  align-self: center;
+}
+
 .item-row.child {
   margin-left: 28px;
-  grid-template-columns: var(--tap) 1fr auto;
   background:
     linear-gradient(160deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015) 28%, transparent 55%),
     rgba(16, 23, 40, 0.55);
+}
+
+.item-copy {
+  min-width: 0;
+}
+
+.item-context {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.completed-section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--tap);
+  padding: 12px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.completed-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.completed-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+}
+
+.chevron {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+.completed-section[open] .chevron {
+  transform: translateY(2px) rotate(45deg);
+}
+
+.completed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 12px;
 }
 
 .check {

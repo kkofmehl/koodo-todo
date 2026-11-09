@@ -84,6 +84,42 @@ describe('Lists reorder API', () => {
     assert.deepEqual(listed.body.lists.map((list) => list.id), [first.id, third.id, second.id]);
   });
 
+  it('reorders items and places checked items after open ones', async () => {
+    const list = todoStore.createList({ name: 'Tasks', color: '#5B8DEF' });
+    const alpha = todoStore.addItem(list.id, { text: 'Alpha' });
+    const beta = todoStore.addItem(list.id, { text: 'Beta' });
+    const gamma = todoStore.addItem(list.id, { text: 'Gamma' });
+    const child = todoStore.addSubItem(list.id, alpha.id, { text: 'Child' });
+
+    const reordered = await request('POST', `/api/lists/${list.id}/items/reorder`, {
+      ids: [gamma.id, alpha.id, beta.id],
+    });
+    assert.equal(reordered.status, 200);
+    assert.deepEqual(reordered.body.list.items.map((item) => item.text), ['Gamma', 'Alpha', 'Beta']);
+
+    const childOrder = await request('POST', `/api/lists/${list.id}/items/${alpha.id}/subitems/reorder`, {
+      ids: [child.id],
+    });
+    assert.equal(childOrder.status, 200);
+
+    const checked = await request('PATCH', `/api/lists/${list.id}/items/${alpha.id}`, {
+      completed: true,
+    });
+    assert.equal(checked.status, 200);
+    assert.deepEqual(checked.body.list.items.map((item) => item.text), ['Gamma', 'Beta', 'Alpha']);
+
+    const unchecked = await request('PATCH', `/api/lists/${list.id}/items/${alpha.id}`, {
+      completed: false,
+    });
+    assert.deepEqual(unchecked.body.list.items.map((item) => item.text), ['Gamma', 'Beta', 'Alpha']);
+
+    const rejected = await request('POST', `/api/lists/${list.id}/items/reorder`, {
+      ids: [gamma.id],
+    });
+    assert.equal(rejected.status, 400);
+    assert.equal(rejected.body.error, 'Invalid item order');
+  });
+
   it('rejects an incomplete order', async () => {
     const first = todoStore.createList({ name: 'Alpha', color: '#5B8DEF' });
     todoStore.createList({ name: 'Beta', color: '#7C5CFC' });
